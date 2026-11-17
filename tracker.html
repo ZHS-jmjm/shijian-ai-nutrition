@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>今日摄入 · 食鉴 AI 营养分析师</title>
+  <meta name="description" content="追踪每日热量预算与三大营养素，查看近 7 天营养周报。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scroll.css">
+  <style>
+    .tracker-page {
+      --tk-inset: #f1f3e9;
+      --tk-protein: #527284;
+      --tk-carb: #245644;
+      --tk-fat: #916735;
+    }
+    .container-wide { max-width: 1200px; margin: 0 auto; padding-inline: clamp(16px, 3vw, 34px); }
+    .tk-section { padding-block: clamp(22px, 3.5vw, 44px); }
+    .tk-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, 32%);
+      min-height: 182px;
+      overflow: hidden;
+      border-radius: 24px;
+      background: #193d31;
+      color: #fffdf8;
+    }
+    .tk-hero-copy { padding: clamp(24px, 4vw, 48px); align-self: center; }
+    .tk-hero h1 {
+      color: inherit;
+      font: 700 clamp(28px, 4vw, 46px)/1.2 var(--display-font);
+      margin: 0 0 14px;
+    }
+    .tk-hero p { color: #e4ebdf; max-width: 36em; }
+    .tk-hero img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; object-position: 50% 55%; }
+    .tk-grid { display: grid; grid-template-columns: minmax(0, 1.16fr) minmax(0, .84fr); gap: 22px; align-items: start; }
+    @media (max-width: 900px) { .tk-grid { grid-template-columns: minmax(0, 1fr); } }
+    .tk-card { background: #fffdf8; border: 1px solid #e2e6db; border-radius: 22px; padding: clamp(16px, 2.8vw, 28px); }
+    .tk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .tk-head h2 { color: #193d31; font: 700 22px/1.35 var(--display-font); margin: 0 0 4px; }
+    .tk-head p { margin: 0; font-size: 13px; color: var(--ink-2); }
+    .tk-goal { font-size: 13px; color: var(--ink-2); background: var(--tk-inset); padding: 6px 10px; border-radius: 10px; white-space: nowrap; }
+    .tk-goal input { width: 74px; border: 1px solid #cdd7ca; border-radius: 8px; background: #fffdf8; color: #193d31; padding: 4px 6px; font: inherit; font-weight: 700; text-align: center; }
+
+    /* 左卡上半：热量环 + 三餐卡片 */
+    .tk-top { display: flex; gap: 18px; align-items: center; margin-bottom: 16px; }
+    .tk-ring { position: relative; width: 122px; height: 122px; flex: 0 0 auto; }
+    .ring-bg { fill: none; stroke: #e2e6db; stroke-width: 10; }
+    .ring-fg { fill: none; stroke: var(--tk-carb); stroke-width: 10; stroke-linecap: round;
+               transform: rotate(-90deg); transform-origin: 61px 61px; transition: stroke-dashoffset .6s, stroke .3s; }
+    .ring-fg.over { stroke: var(--red); }
+    .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ring-center b { color: #193d31; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .ring-center small { font-size: 11px; color: var(--ink-2); }
+    .ring-center span { font-size: 10.5px; color: var(--ink-2); margin-top: 2px; }
+    .tk-mealcol { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .tk-chip { display: inline-block; background: #e8ede1; color: #245644; font-size: 12.5px;
+               padding: 4px 10px; border-radius: 999px; align-self: flex-start; font-weight: 600; }
+    .tk-meal-cards { display: flex; gap: 8px; }
+    .tk-meal { flex: 1; min-width: 0; background: var(--tk-inset); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+    .tk-meal b { font-size: 12.5px; }
+    .tk-meal .st { font-size: 11px; color: var(--ink-2); }
+    .tk-meal em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--green-600); }
+    .tk-meal.off em { color: var(--ink-2); font-weight: 400; }
+
+    /* 目标进度 + 达成统计 */
+    .tk-progress { margin-bottom: 14px; }
+    .tk-progress-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 6px; }
+    .tk-progress-head b { color: var(--tk-carb); }
+    .tk-bar { height: 8px; background: #e2e6db; border-radius: 999px; overflow: hidden; }
+    .tk-bar i { display: block; height: 100%; width: 0; background: var(--tk-carb); border-radius: 999px; transition: width .6s; }
+    .tk-bar i.over { background: var(--red); }
+    .tk-progress-foot { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-2); margin-top: 5px; gap: 8px; }
+    .tk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .tk-stat { background: var(--tk-inset); border-radius: 12px; padding: 8px 10px; }
+    .tk-stat span { font-size: 11px; color: var(--ink-2); display: block; }
+    .tk-stat b { font-size: 16px; color: #193d31; font-variant-numeric: tabular-nums; }
+
+    /* 左卡下半：签到网格 + 柱状图 */
+    .tk-panels { display: grid; grid-template-columns: 1fr 1.15fr; gap: 12px; }
+    @media (max-width: 560px) { .tk-panels { grid-template-columns: 1fr; } }
+    .tk-panel { background: var(--tk-inset); border-radius: 14px; padding: 12px; min-width: 0; }
+    .tk-panel h3 { color: #193d31; font-size: 14px; margin: 0 0 10px; }
+    .tk-summary { font-size: 11px; color: var(--ink-2); margin: 6px 0 0; }
+    .tk-sign { display: grid; grid-template-columns: auto repeat(7, 1fr); gap: 4px; font-size: 10.5px; align-items: center; text-align: center; }
+    .tk-sign .hd, .tk-sign .rl { color: var(--ink-2); }
+    .tk-sign .cell { height: 16px; border-radius: 4px; background: #dde3d6; justify-self: center; width: 100%; max-width: 22px; }
+    .tk-sign .cell.on { background: var(--tk-carb); }
+
+    /* 右卡：三大营养素 */
+    .tk-macro-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .tk-macro { background: var(--tk-inset); border-radius: 12px; padding: 10px 12px; }
+    .tk-macro span { font-size: 12px; color: var(--ink-2); display: block; margin-bottom: 2px; }
+    .tk-macro b { font-size: 21px; font-variant-numeric: tabular-nums; }
+    .tk-macro.c-p b { color: var(--tk-protein); }
+    .tk-macro.c-c b { color: var(--tk-carb); }
+    .tk-macro.c-f b { color: var(--tk-fat); }
+    .tk-trend h3 { color: #193d31; font-size: 14px; margin: 0 0 6px; }
+    .tk-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--ink-2); justify-content: flex-end; margin-bottom: 4px; }
+    .tk-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+
+    /* AI 今日饮食建议 */
+    .tk-advice { margin-top: 16px; background: var(--tk-inset); border: 1px solid #e2e6db; border-radius: 16px; padding: 14px 16px; }
+    .tk-advice-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .tk-advice-head h3 { font-size: 13.5px; margin: 0; }
+    .ai-advice-text { font-size: 13px; line-height: 1.75; color: var(--ink); white-space: pre-wrap; margin: 0; }
+    .ai-advice-text.loading { color: var(--ink-2); }
+
+    @media (max-width: 560px) {
+      .tk-hero { grid-template-columns: minmax(0, 1fr); }
+      .tk-hero img { height: 98px; }
+      .tk-head, .tk-advice-head, .tk-legend { flex-wrap: wrap; }
+      .tk-top { flex-direction: column; }
+      .tk-mealcol { width: 100%; }
+      .tk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    /* 图表沿用数据脚本生成的 SVG，仅统一颜色。 */
+    :is(#week-chart, #trend-chart) text { fill: #526456; }
+    :is(#week-chart, #trend-chart) text[font-weight="700"] { fill: #245644; }
+    :is(#week-chart, #trend-chart) line { stroke: #dce3d7; }
+    #week-chart .hist-bar { fill: #aebfaf; }
+    #week-chart .hist-bar[fill="#10b981"] { fill: var(--tk-carb); }
+    #trend-chart [stroke="#3b82f6"] { stroke: var(--tk-protein); }
+    #trend-chart [stroke="#10b981"] { stroke: var(--tk-carb); }
+    #trend-chart [stroke="#f59e0b"] { stroke: var(--tk-fat); }
+    #trend-chart path[fill="#3b82f6"] { fill: var(--tk-protein); }
+    #trend-chart path[fill="#10b981"] { fill: var(--tk-carb); }
+    #trend-chart path[fill="#f59e0b"] { fill: var(--tk-fat); }
+    .hist-bar { transition: opacity .2s; }
+    .hist-bar:hover { opacity: .75; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ring-fg, .tk-bar i, .hist-bar { transition: none; }
+    }
+  </style>
+</head>
+<body class="tracker-page">
+
+  <!-- ============ 顶部导航 ============ -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <a class="logo" href="home.html">
+        <span class="logo-icon">🥗</span>
+        <span class="logo-text">食鉴 <em>AI 营养分析师</em></span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="home.html">首页</a>
+        <a href="nutrition.html">AI 营养师</a>
+        <a href="chat.html">营养师对话</a>
+        <a href="tracker.html" aria-current="page">今日摄入</a>
+        <a href="exercise.html">运动中心</a>
+      </nav>
+      <div class="nav-user" id="nav-user"></div>
+    </div>
+  </header>
+
+  <!-- ============ 独立吸附滚动容器 ============ -->
+  <main class="page-scroll" id="pageScroll">
+
+    <!-- 区块1：页面标题 Banner -->
+    <section class="snap-block tk-section" data-block-name="页面标题">
+      <div class="container-wide">
+        <div class="tk-hero">
+          <div class="tk-hero-copy">
+            <h1>营养管理 · 今日摄入</h1>
+            <p>三餐烟火皆有迹，营养健康不缺课 —— 数据保存在本机 MySQL 数据库，仅关联你自己的账号。</p>
+          </div>
+          <img src="image/veggies.jpg" alt="" decoding="async">
+        </div>
+      </div>
+    </section>
+
+    <!-- 区块2：数据总览仪表盘（左：摄入与三餐规律 / 右：三大营养素） -->
+    <section class="snap-block" data-block-name="摄入总览">
+      <div class="container-wide">
+        <div class="tk-grid">
+
+          <!-- 左卡：今日摄入与三餐规律 -->
+          <div class="tk-card">
+            <div class="tk-head">
+              <div class="tk-head-text">
+                <h2>今日摄入与三餐规律</h2>
+                <p>查看今日余额与近 7 日一览</p>
+              </div>
+              <label class="tk-goal">每日目标
+                <input type="number" id="goal-input" min="800" max="6000" step="50" value="2000"> kcal
+              </label>
+            </div>
+
+            <div class="tk-top">
+              <div class="tk-ring">
+                <svg viewBox="0 0 122 122" aria-hidden="true">
+                  <circle class="ring-bg" cx="61" cy="61" r="50"></circle>
+                  <circle class="ring-fg" id="ring-fill" cx="61" cy="61" r="50"></circle>
+                </svg>
+                <div class="ring-center">
+                  <b id="ring-kcal">0</b><small>kcal</small>
+                  <span>目标 <em id="ring-goal" style="font-style:normal">2000</em> kcal</span>
+                </div>
+              </div>
+              <div class="tk-mealcol">
+                <span class="tk-chip" id="sign-chip">今日签到 0/3 餐</span>
+                <div class="tk-meal-cards">
+                  <div class="tk-meal off" id="meal-b"><b>早餐</b><span class="st">未记录</span><em>0 kcal</em></div>
+                  <div class="tk-meal off" id="meal-l"><b>午餐</b><span class="st">未记录</span><em>0 kcal</em></div>
+                  <div class="tk-meal off" id="meal-d"><b>晚餐</b><span class="st">未记录</span><em>0 kcal</em></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tk-progress">
+              <div class="tk-progress-head"><span>每日目标达成</span><b id="goal-pct">0%</b></div>
+              <div class="tk-bar"><i id="tk-fill"></i></div>
+              <div class="tk-progress-foot">
+                <span id="goal-remain">还能吃 2000 kcal</span>
+                <span class="ov-sync" id="ov-exercise" hidden></span>
+              </div>
+            </div>
+
+            <div class="tk-stats">
+              <div class="tk-stat"><span>近7日达成率</span><b id="st-rate">0%</b></div>
+              <div class="tk-stat"><span>早餐达成</span><b id="st-b">0 天</b></div>
+              <div class="tk-stat"><span>午餐达成</span><b id="st-l">0 天</b></div>
+              <div class="tk-stat"><span>晚餐达成</span><b id="st-d">0 天</b></div>
+            </div>
+
+            <div class="tk-panels">
+              <div class="tk-panel">
+                <h3>近7日三餐签到</h3>
+                <div class="tk-sign" id="sign-grid"></div>
+              </div>
+              <div class="tk-panel">
+                <h3>近7日每日摄入</h3>
+                <svg id="week-chart" viewBox="0 0 380 190" style="width:100%" role="img" aria-label="近 7 天每日摄入热量柱状图"></svg>
+                <p class="tk-summary" id="week-summary"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右卡：三大营养素 -->
+          <div class="tk-card">
+            <div class="tk-head">
+              <div class="tk-head-text">
+                <h2>三大营养素</h2>
+                <p>记录已选食物，近 7 日趋势</p>
+              </div>
+            </div>
+
+            <div class="tk-macro-inputs">
+              <div class="tk-macro c-p"><span>蛋白质 (g)</span><b id="ov-protein">0g</b></div>
+              <div class="tk-macro c-c"><span>碳水 (g)</span><b id="ov-carb">0g</b></div>
+              <div class="tk-macro c-f"><span>脂肪 (g)</span><b id="ov-fat">0g</b></div>
+            </div>
+
+            <div class="tk-trend">
+              <h3>近7日三大营养素趋势</h3>
+              <div class="tk-legend">
+                <span><i style="background:var(--tk-protein)"></i>蛋白质</span>
+                <span><i style="background:var(--tk-carb)"></i>碳水</span>
+                <span><i style="background:var(--tk-fat)"></i>脂肪</span>
+              </div>
+              <svg id="trend-chart" viewBox="0 0 420 270" style="width:100%" role="img" aria-label="近 7 日三大营养素趋势曲线"></svg>
+            </div>
+
+            <!-- AI 今日饮食建议 -->
+            <div class="tk-advice">
+              <div class="tk-advice-head">
+                <h3>🤖 AI 今日饮食建议</h3>
+                <button class="btn btn-ghost btn-sm" id="ai-advice-btn">让 AI 看看</button>
+              </div>
+              <p class="ai-advice-text" id="ai-advice-text">点一下「让 AI 看看」，AI 会结合你今日摄入和近 7 天记录，给出个性化饮食建议。</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- 区块3：历史餐食记录列表 -->
+    <section class="snap-block tk-section" data-block-name="餐食记录">
+      <div class="container-wide">
+        <h2 class="section-title">🍽️ 今天的餐食记录</h2>
+        <p class="section-desc">每一条都来自「AI 分析 → 记入今日摄入」，可单独删除。</p>
+
+        <div class="tracker-card">
+          <div class="tracker-macros" id="tracker-macros">
+            <span>蛋白质 0g</span><span>碳水 0g</span><span>脂肪 0g</span>
+          </div>
+          <ul class="meal-list" id="meal-list">
+            <li class="meal-empty">还没有记录，先去分析一餐吧 👆</li>
+          </ul>
+        </div>
+
+        <footer class="footer">
+          <div class="container">
+            <p><strong>🥗 食鉴 · AI 营养分析师</strong> — AI 健康与生活服务主题参赛作品</p>
+            <p class="disclaimer">⚠️ 免责声明：所有营养数据均为估算，仅供参考，不构成医学诊断或治疗建议。</p>
+          </div>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- 右侧圆点指示器 -->
+  <nav class="dots" id="dots" aria-label="页面区块导航"></nav>
+
+  <script src="js/auth.js"></script>
+  <script src="js/ai-api.js"></script>
+  <script src="js/meal-thumbnails.js"></script>
+  <script src="js/tracker.js"></script>
+  <script src="js/scroll-ui.js"></script>
+  <script src="js/global-ui.js"></script>
+</body>
+</html>

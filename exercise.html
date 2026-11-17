@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>运动中心 · 食鉴 AI 营养分析师</title>
+  <meta name="description" content="记录日常活动，热量自动同步到今日营养概览">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>">
+  <link rel="stylesheet" href="css/exercise-utilities.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scroll.css">
+  <style>
+    .exercise-page { --ex-inset: #edf0e5; }
+    .ex-shell { width: 100%; max-width: 1200px; margin-inline: auto; padding-inline: clamp(16px, 3vw, 34px); }
+    .ex-section { padding-top: clamp(24px, 4vw, 48px); }
+    .ex-section:last-child { padding-bottom: 16px; }
+    .ex-hero {
+      position: relative;
+      isolation: isolate;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(200px, 32%);
+      align-items: center;
+      gap: clamp(18px, 5vw, 64px);
+      padding: clamp(24px, 4vw, 48px);
+      overflow: hidden;
+      border-radius: 24px;
+      background: #193d31;
+      color: #fffdf8;
+    }
+    .ex-hero-image {
+      position: absolute;
+      z-index: -1;
+      inset: 0 0 0 auto;
+      width: 50%;
+      height: 100%;
+      object-fit: cover;
+      opacity: .22;
+      mask-image: linear-gradient(to right, transparent, #000 45%);
+    }
+    .ex-hero h1 { margin: 0 0 10px; font: 700 clamp(32px, 5vw, 54px)/1.15 var(--display-font); }
+    .ex-hero-copy p { margin-bottom: 22px; color: #e4ebdf; }
+    .ex-hero #add-btn { background: #ead8ba; color: #193d31; }
+    .ex-hero #add-btn:hover { background: #f4e6ce; }
+    .ex-hero-stat {
+      padding: 18px 20px;
+      border: 1px solid #e4ebdf55;
+      border-radius: 18px;
+      background: #193d3199;
+    }
+    .ex-hero-stat > p:first-child { font-size: 13px; color: #e4ebdf; }
+    .ex-hero-stat .ex-hero-number { font-size: clamp(32px, 5vw, 48px); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-block: 6px; }
+    .ex-hero-number small { font-size: 14px; font-weight: 500; color: #e4ebdf; }
+    .ex-hero-note { font-size: 13px; color: #e4ebdf; }
+
+    .ex-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .ex-overview .ov-card {
+      padding: clamp(14px, 2vw, 24px);
+      justify-content: flex-start;
+      border: 1px solid #e2e6db;
+      border-radius: 20px;
+      background: #fffdf8;
+      box-shadow: none;
+    }
+    .ex-overview .ov-num { color: #193d31; font-variant-numeric: tabular-nums; line-height: 1.2; }
+    .ex-overview .ov-bar { height: 7px; background: #e2e6db; }
+    .ex-overview #ov-weekfill { background: #245644 !important; }
+    .ex-subheading { margin-top: clamp(30px, 5vw, 54px); }
+    .ex-panel { background: #fffdf8; border: 1px solid #e2e6db; border-radius: 22px; padding: clamp(15px, 3vw, 28px); }
+    .ex-empty { padding: clamp(30px, 5vw, 52px) 16px; text-align: center; background: #fffdf8; border: 1px dashed #bdcbbd; border-radius: 20px; }
+    .ex-empty p { color: #526456; }
+    .ex-empty-icon { margin-bottom: 10px; font-size: 32px; line-height: 1.2; }
+
+    .lift { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    .lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px #193d3116; }
+    .exercise-recommendation, #rec-list [data-del] { border: 1px solid #e2e6db; background: #fffdf8; box-shadow: none; }
+    .exercise-recommendation { font: inherit; text-align: left; }
+    .exercise-recommendation:hover, #rec-list [data-del]:hover { border-color: #9bb09f; }
+    .exercise-recommendation-icon {
+      display: grid; place-items: center; flex: 0 0 clamp(58px, 10vw, 96px);
+      background: var(--ex-inset); font-size: 1.8rem;
+    }
+    .exercise-recommendation .text-gray-400, .exercise-recommendation .text-gray-500,
+    #rec-list .text-gray-400, #week-summary { color: #526456; }
+    .exercise-recommendation .text-gray-800, #rec-list .text-gray-800 { color: #202b24; }
+    .ex-effort { background: var(--ex-inset); color: #245644; }
+    .ex-effort-moderate { background: #f1e9da; color: #79572f; }
+
+    .qtab {
+      padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600;
+      border: 1px solid #d8e0d4; background: #fffdf8; color: #526456; cursor: pointer;
+      transition: background .2s, border-color .2s, color .2s; font-family: inherit;
+    }
+    .qtab.active { background: #245644; border-color: #245644; color: #fffdf8; }
+    .qtab:not(.active):hover { border-color: #245644; color: #245644; }
+
+    .qtag {
+      padding: 9px 12px; border-radius: 10px; font-size: 14px; cursor: pointer; text-align: left;
+      background: var(--ex-inset); color: #245644; border: 1px solid transparent;
+      transition: background .2s, border-color .2s; font-family: inherit;
+    }
+    .qtag:hover { background: #e4eadc; border-color: #9bb09f; }
+
+    #week-chart text { fill: #526456; }
+    #week-chart text[font-weight="700"], #week-chart text[font-weight="600"] { fill: #245644; }
+    #week-chart polyline, #week-chart circle { stroke: #245644; }
+    #week-chart stop { stop-color: #728e72; }
+
+    #ex-modal { background: #192e26aa; }
+    #ex-modal .ex-dialog { background: #fffdf8; border-radius: 22px; }
+    .ex-dialog h3 { color: #193d31; font-family: var(--display-font); }
+    .ex-dialog label > span, .ex-dialog .ex-estimate { color: #526456; }
+    .ex-dialog input, .ex-dialog select { background: #fffdf8; border-color: #d1dacd; }
+    .ex-dialog input:focus, .ex-dialog select:focus { border-color: #245644; }
+    .ex-dialog #ex-kcal { color: #245644; }
+    .ex-dialog #ex-save { background: #245644; }
+    .ex-dialog #ex-cancel { border-color: #d1dacd; color: #526456; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px);
+      width: max-content; max-width: calc(100% - 32px); background: #193d31; color: #fffdf8; font-size: 14px; padding: 11px 22px;
+      border-radius: 999px; opacity: 0; pointer-events: none;
+      transition: opacity .3s, transform .3s; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 860px) {
+      .ex-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .ex-hero { grid-template-columns: minmax(0, 1fr); }
+      .ex-hero-image { width: 66%; }
+      .ex-overview { gap: 10px; }
+      .ex-overview .ov-num { font-size: 26px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .lift, .qtab, .qtag, .toast { transition: none; }
+      .lift:hover { transform: none; }
+    }
+  </style>
+</head>
+<body class="exercise-page">
+
+  <!-- ============ 顶部导航（固定） ============ -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <a class="logo" href="home.html">
+        <span class="logo-icon">🥗</span>
+        <span class="logo-text">食鉴 <em>AI 营养分析师</em></span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="home.html">首页</a>
+        <a href="nutrition.html">AI 营养师</a>
+        <a href="chat.html">营养师对话</a>
+        <a href="tracker.html">今日摄入</a>
+        <a href="exercise.html" aria-current="page">运动中心</a>
+      </nav>
+      <div class="nav-user" id="nav-user"></div>
+    </div>
+  </header>
+
+  <!-- ============ 独立吸附滚动容器 ============ -->
+  <main class="page-scroll" id="pageScroll">
+
+    <!-- 区块1：头部 Banner + 添加运动记录按钮 -->
+    <section class="snap-block ex-section" data-block-name="运动中心首页">
+      <div class="ex-shell">
+        <div class="ex-hero">
+          <img class="ex-hero-image" src="image/kiwi-bg.jpg" alt="" decoding="async">
+          <div class="ex-hero-copy">
+            <h1>运动中心</h1>
+            <p>记录日常活动，热量自动同步到今日营养概览</p>
+            <button id="add-btn" class="btn btn-primary">＋ 添加一条运动记录</button>
+          </div>
+          <div class="ex-hero-stat">
+            <p>今日运动消耗</p>
+            <p class="ex-hero-number"><span id="bn-burn">0</span><small> kcal</small></p>
+            <p class="ex-hero-note">≈ 一份番茄炒蛋盖饭的一半，很棒 ✨</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 区块2：今日运动概览卡片 -->
+    <section class="snap-block ex-section" data-block-name="运动概览">
+      <div class="ex-shell">
+        <div class="ex-overview">
+          <div class="ov-card">
+            <p class="ov-title">🏃 今日运动时长</p>
+            <p class="ov-num"><span id="ov-min">0</span><small> 分钟</small></p>
+            <p class="ov-sync">相当于一节体育课的时间</p>
+          </div>
+          <div class="ov-card">
+            <p class="ov-title">🔥 运动消耗</p>
+            <p class="ov-num"><span id="ov-burn">0</span><small> kcal</small></p>
+            <p class="ov-sync">已同步到今日热量额度</p>
+          </div>
+          <div class="ov-card">
+            <p class="ov-title">📊 今日活动次数</p>
+            <p class="ov-num"><span id="ov-count">0</span><small> 次</small></p>
+            <p class="ov-sync">碎片时间动一动也很有效</p>
+          </div>
+          <div class="ov-card">
+            <p class="ov-title">✅ 本周目标完成进度</p>
+            <p class="ov-num"><span id="ov-weekpct">0</span><small> %</small></p>
+            <div class="ov-bar"><i id="ov-weekfill"></i></div>
+            <p class="ov-sync" id="ov-weeknote">本周目标：舒展 5 天</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 区块3：今日运动记录 + 轻运动推荐 -->
+    <section class="snap-block ex-section" data-block-name="运动记录与推荐">
+      <div class="ex-shell">
+        <h2 class="section-title">📝 今日运动记录</h2>
+        <p class="section-desc">横向滑动查看，点击卡片可以删除这一条。</p>
+
+        <!-- 有记录 -->
+        <div id="rec-list" class="hscroll"></div>
+
+        <!-- 无记录占位 -->
+        <div id="rec-empty" hidden class="ex-empty">
+          <div class="ex-empty-icon" aria-hidden="true">🚶‍♀️🌿</div>
+          <p>还没有运动记录，饭后散散步也是很棒的活动。</p>
+          <p>从下面的「快速选择运动」里点一个试试～</p>
+        </div>
+
+        <h2 class="section-title ex-subheading">💡 适配你今日饮食的轻运动推荐</h2>
+        <p class="section-desc">点击卡片即可按预估时长快速记录。</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <button type="button" class="bg-white rounded-2xl shadow-sm overflow-hidden flex lift cursor-pointer exercise-recommendation" data-add="饭后散步" data-icon="🚶" data-min="20" data-rate="3.3">
+            <span class="exercise-recommendation-icon" aria-hidden="true">🚶</span>
+            <span class="p-5 flex-1">
+              <span class="flex items-center gap-2 mb-1.5">
+                <strong class="text-[16px] text-gray-800">饭后散步</strong>
+                <span class="ex-effort text-[11px] font-semibold px-2 py-0.5 rounded-full">低</span>
+              </span>
+              <span class="block text-[13px] text-gray-500 mb-2">预估时长 20-30 分钟 · 约 70-100 kcal</span>
+              <span class="block text-[13px] text-gray-400">帮餐后血糖更平稳，小区里走两圈就好。</span>
+            </span>
+          </button>
+
+          <button type="button" class="bg-white rounded-2xl shadow-sm overflow-hidden flex lift cursor-pointer exercise-recommendation" data-add="居家拉伸" data-icon="🧘" data-min="15" data-rate="2.6">
+            <span class="exercise-recommendation-icon" aria-hidden="true">🧘</span>
+            <span class="p-5 flex-1">
+              <span class="flex items-center gap-2 mb-1.5">
+                <strong class="text-[16px] text-gray-800">居家拉伸</strong>
+                <span class="ex-effort text-[11px] font-semibold px-2 py-0.5 rounded-full">低</span>
+              </span>
+              <span class="block text-[13px] text-gray-500 mb-2">预估时长 10-15 分钟 · 约 30-40 kcal</span>
+              <span class="block text-[13px] text-gray-400">肩颈腰背都松一松，久坐学习后来一组。</span>
+            </span>
+          </button>
+
+          <button type="button" class="bg-white rounded-2xl shadow-sm overflow-hidden flex lift cursor-pointer exercise-recommendation" data-add="瑜伽" data-icon="🕉️" data-min="30" data-rate="2.7">
+            <span class="exercise-recommendation-icon" aria-hidden="true">🕉️</span>
+            <span class="p-5 flex-1">
+              <span class="flex items-center gap-2 mb-1.5">
+                <strong class="text-[16px] text-gray-800">瑜伽</strong>
+                <span class="ex-effort ex-effort-moderate text-[11px] font-semibold px-2 py-0.5 rounded-full">中等</span>
+              </span>
+              <span class="block text-[13px] text-gray-500 mb-2">预估时长 20-30 分钟 · 约 55-80 kcal</span>
+              <span class="block text-[13px] text-gray-400">慢慢呼吸慢慢做，睡前来一组更放松。</span>
+            </span>
+          </button>
+
+          <button type="button" class="bg-white rounded-2xl shadow-sm overflow-hidden flex lift cursor-pointer exercise-recommendation" data-add="慢骑" data-icon="🚲" data-min="40" data-rate="4">
+            <span class="exercise-recommendation-icon" aria-hidden="true">🚲</span>
+            <span class="p-5 flex-1">
+              <span class="flex items-center gap-2 mb-1.5">
+                <strong class="text-[16px] text-gray-800">慢骑</strong>
+                <span class="ex-effort ex-effort-moderate text-[11px] font-semibold px-2 py-0.5 rounded-full">中等</span>
+              </span>
+              <span class="block text-[13px] text-gray-500 mb-2">预估时长 30-40 分钟 · 约 120-160 kcal</span>
+              <span class="block text-[13px] text-gray-400">河边绿道骑一圈，轻松又有活力。</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 区块4：快捷运动分类 + 本周运动折线图 -->
+    <section class="snap-block ex-section" data-block-name="快捷分类与周报">
+      <div class="ex-shell">
+        <h2 class="section-title">快速选择运动</h2>
+        <p class="section-desc">选个分类，点一下就记好了，热量自动帮你算。</p>
+
+        <div class="ex-panel">
+          <div class="flex flex-wrap gap-3 mb-5" id="qtabs"></div>
+          <div class="flex flex-wrap gap-3" id="qtags"></div>
+        </div>
+
+        <h2 class="section-title ex-subheading">📈 本周运动统计</h2>
+        <p class="section-desc">周一到周日，每天的运动消耗都在这里。</p>
+
+        <div class="ex-panel relative overflow-hidden">
+          <svg id="week-chart" viewBox="0 0 720 250" class="w-full relative z-10" role="img" aria-label="本周每日运动消耗折线图"></svg>
+          <p class="text-center text-[14px] text-gray-500 mt-4 relative z-10" id="week-summary"></p>
+        </div>
+
+        <footer class="footer">
+          <div class="container">
+            <p><strong>🥗 食鉴 · AI 营养分析师</strong> — AI 健康与生活服务主题参赛作品</p>
+            <p class="disclaimer">⚠️ 免责声明：运动消耗均为估算，仅供参考，不构成医学建议。</p>
+          </div>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- 右侧圆点指示器 -->
+  <nav class="dots" id="dots" aria-label="页面区块导航"></nav>
+
+  <!-- ============ 添加运动记录弹窗 ============ -->
+  <div id="ex-modal" hidden class="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+    <div class="ex-dialog shadow-xl w-full max-w-[380px] p-7">
+      <h3 class="text-[18px] font-bold text-gray-800 mb-4">＋ 添加一条运动记录</h3>
+      <label class="block mb-4">
+        <span class="block text-[13px] text-gray-500 mb-1.5 font-semibold">运动项目</span>
+        <select id="ex-select" class="w-full px-3 py-2.5 border-[1.5px] border-gray-200 rounded-[10px] text-[14px] outline-none focus:border-[#10b981] bg-white"></select>
+      </label>
+      <label class="block mb-4">
+        <span class="block text-[13px] text-gray-500 mb-1.5 font-semibold">时长（分钟）</span>
+        <input type="number" id="ex-min" min="1" max="600" value="30"
+               class="w-full px-3 py-2.5 border-[1.5px] border-gray-200 rounded-[10px] text-[14px] outline-none focus:border-[#10b981]">
+      </label>
+      <p class="ex-estimate text-[13px] mb-5">预计消耗：<b id="ex-kcal">0</b> kcal</p>
+      <div class="flex gap-3">
+        <button id="ex-cancel" class="flex-1 py-2.5 rounded-xl border-[1.5px] border-gray-200 text-gray-500 text-[14px] font-semibold hover:border-gray-300 transition">取消</button>
+        <button id="ex-save" class="flex-1 py-2.5 rounded-xl text-white text-[14px] font-semibold transition">记下来</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    Auth.mountNavUser(document.getElementById("nav-user"));
+  </script>
+  <script src="js/exercise.js"></script>
+  <script src="js/scroll-ui.js"></script>
+  <script src="js/global-ui.js"></script>
+</body>
+</html>

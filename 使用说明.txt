@@ -1,0 +1,33 @@
+﻿食鉴 · Windows x64 迁移说明
+
+一、在新电脑启动
+
+  1. 把 ZIP 复制到 Windows x64 电脑。右键选择「全部解压」。
+     把解压出来的 Shijian 文件夹放在自己可写的位置。
+  2. 打开 Shijian 文件夹，双击「启动.bat」。
+     包内已带 Node.js、MySQL 和后端依赖。首次启动会初始化数据库。
+  3. 等待终端显示服务已启动。默认浏览器地址为 http://localhost:3000。
+     演示用户名是 test，密码是 123456。也可以从登录页自行注册。
+
+二、数据库和 AI
+
+  迁移包首次启动会创建新数据库。账号、餐食和 AI 分析历史保存在
+  项目内的 .runtime\mysql-data。饮水和运动记录由浏览器保存。
+  如手头有食鉴的 MySQL 逻辑备份，且包含 shijian_nutrition 建库语句，
+  可在首次启动前放到 database\migration.sql，用于初始化时导入。
+
+  默认启用 AI 演示模式。需要在线 AI 时，用记事本打开 server\.env，
+  设置 AI_API_KEY（按需填写 AI_BASE_URL 和 AI_MODEL），保存后重新启动。
+  请保留本包的数据库连接配置，尤其是 DB_PASSWORD。
+
+三、遇到启动问题
+
+  如果端口被占用，在 server\.env 修改 APP_PORT（网页默认 3000）
+  或 DB_PORT（数据库默认 3307），再重新双击启动。以终端显示的地址为准。
+
+  如果提示缺少 VCRUNTIME 或 MSVCP DLL，请安装微软的 x64 Visual C++
+  Redistributable，然后再启动。
+  微软官方安装程序 https://aka.ms/vc14/vc_redist.x64.exe
+  MySQL 官方安装说明 https://dev.mysql.com/doc/refman/8.4/en/windows-installation.html
+
+  网页运行期间保留终端窗口。

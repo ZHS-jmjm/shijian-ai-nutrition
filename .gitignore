@@ -1,0 +1,10 @@
+# 依赖
+node_modules/
+.runtime/
+
+# 机密配置：API Key 与数据库密码
+server/.env
+
+# 日志与临时文件
+*.log
+.DS_Store
