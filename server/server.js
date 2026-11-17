@@ -6,7 +6,7 @@
  *
  * 职责：
  *   1. 托管前端页面与静态资源
- *   2. 提供 REST API：注册 / 登录 / 会话、今日摄入记录、每日目标、
+ *   2. 提供 REST API：注册 / 登录 / 会话、个人资料、今日摄入记录、每日目标、
  *      AI 分析历史 —— 数据全部落到 MySQL（shijian_nutrition 库）
  * ============================================================ */
 
@@ -36,6 +36,10 @@ const PORT = Number(process.env.APP_PORT || 3000);
 const bundledMysql = path.join(__dirname, "..", ".runtime", "mysql", "bin", "mysqld.exe");
 const listenHost = fs.existsSync(bundledMysql) ? "127.0.0.1" : undefined;
 const SESSION_DAYS = 7;
+const PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_MAX_LENGTH = 30;
+const DISPLAY_NAME_MAX_LENGTH = 32;
+const AVATARS = new Set(["initial", "leaf", "grain", "berry"]);
 
 const app = express();
 
@@ -56,19 +60,50 @@ function handled(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
+async function inTransaction(operation) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await operation(connection);
+    await connection.commit();
+    return result;
+  } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      connection.destroy();
+      throw rollbackError;
+    }
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+function publicUser(user) {
+  return {
+    username: user.username,
+    goal: user.goal,
+    displayName: user.display_name ?? "",
+    avatar: user.avatar ?? "initial",
+  };
+}
+
 /* ---------- 会话校验中间件：从 Authorization: Bearer <token> 解出当前用户 ---------- */
 const requireUser = handled(async (req, res, next) => {
   const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   if (!token) return res.status(401).json({ ok: false, msg: "未登录" });
 
   const [rows] = await pool.query(
-    `SELECT u.id, u.username, u.goal FROM sessions s
+    `SELECT u.id, u.username, u.goal, p.display_name, p.avatar FROM sessions s
      JOIN users u ON u.id = s.user_id
+     LEFT JOIN user_profiles p ON p.user_id = u.id
      WHERE s.token = ? AND s.expires_at > NOW()`,
     [token]
   );
   if (!rows.length) return res.status(401).json({ ok: false, msg: "登录已过期，请重新登录" });
   req.user = rows[0];
+  req.sessionToken = token;
   next();
 });
 
@@ -81,35 +116,27 @@ app.post("/api/auth/register", handled(async (req, res) => {
   const pw = String(req.body.password || "");
   if (name.length < 2) return res.json({ ok: false, msg: "用户名至少 2 个字符" });
   if (name.length > 50) return res.json({ ok: false, msg: "用户名最长 50 个字符" });
-  if (pw.length < 6) return res.json({ ok: false, msg: "密码至少 6 位" });
+  if (pw.length < PASSWORD_MIN_LENGTH) return res.json({ ok: false, msg: "密码至少 6 位" });
+  if (pw.length > PASSWORD_MAX_LENGTH) return res.json({ ok: false, msg: "密码最长 30 位" });
 
   const passwordHash = await hashPassword(pw);
-  const connection = await pool.getConnection();
   let token;
   try {
-    await connection.beginTransaction();
-    const [r] = await connection.query(
-      "INSERT INTO users (username, password_hash, goal) VALUES (?, ?, 2000)",
-      [name, passwordHash]
-    );
-    token = await createSession(r.insertId, connection);
-    await connection.commit();
+    token = await inTransaction(async (connection) => {
+      const [r] = await connection.query(
+        "INSERT INTO users (username, password_hash, goal) VALUES (?, ?, 2000)",
+        [name, passwordHash]
+      );
+      return createSession(r.insertId, connection);
+    });
   } catch (err) {
-    try {
-      await connection.rollback();
-    } catch (rollbackError) {
-      connection.destroy();
-      throw rollbackError;
-    }
     if (err.code === "ER_DUP_ENTRY") {
       return res.json({ ok: false, msg: "这个用户名已经被注册啦，换一个试试" });
     }
     throw err;
-  } finally {
-    connection.release();
   }
   cleanupExpiredSessions();
-  return res.json({ ok: true, token, user: { username: name, goal: 2000 } });
+  return res.json({ ok: true, token, user: publicUser({ username: name, goal: 2000 }) });
 }));
 
 app.post("/api/auth/login", handled(async (req, res) => {
@@ -117,20 +144,27 @@ app.post("/api/auth/login", handled(async (req, res) => {
   const pw = String(req.body.password || "");
 
   const [rows] = await pool.query(
-    "SELECT id, username, goal, password_hash FROM users WHERE username = ?",
+    `SELECT u.id, u.username, u.goal, u.password_hash, p.display_name, p.avatar
+     FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.username = ?`,
     [name]
   );
   if (!rows.length) return res.json({ ok: false, msg: "用户名不存在，先注册一个吧" });
   const u = rows[0];
   if (!(await verifyPassword(pw, u.password_hash))) return res.json({ ok: false, msg: "密码不对，再想想？" });
 
-  const token = await createSession(u.id);
+  // 登录与修改密码按相同顺序锁定账户，防止旧密码校验通过后才写入新会话。
+  const token = await inTransaction(async (connection) => {
+    const [[current]] = await connection.query("SELECT password_hash FROM users WHERE id = ? FOR UPDATE", [u.id]);
+    if (current?.password_hash !== u.password_hash) return null;
+    return createSession(u.id, connection);
+  });
+  if (!token) return res.json({ ok: false, msg: "密码已更新，请使用新密码登录" });
   cleanupExpiredSessions();
-  return res.json({ ok: true, token, user: { username: u.username, goal: u.goal } });
+  return res.json({ ok: true, token, user: publicUser(u) });
 }));
 
 /** 生成会话 token（随机 64 位十六进制）并写入 sessions 表 */
-async function createSession(userId, connection = pool) {
+async function createSession(userId, connection) {
   const token = crypto.randomBytes(32).toString("hex");
   await connection.query(
     "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))",
@@ -149,15 +183,75 @@ function cleanupExpiredSessions() {
 }
 
 app.post("/api/auth/logout", requireUser, handled(async (req, res) => {
-  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  await pool.query("DELETE FROM sessions WHERE token = ?", [token]);
+  await pool.query("DELETE FROM sessions WHERE token = ?", [req.sessionToken]);
   res.json({ ok: true });
 }));
 
 /* 当前登录用户信息（含每日目标），页面加载时用它恢复登录态 */
 app.get("/api/auth/me", requireUser, (req, res) => {
-  res.json({ ok: true, user: { username: req.user.username, goal: req.user.goal } });
+  res.json({ ok: true, user: publicUser(req.user) });
 });
+
+app.put("/api/profile", requireUser, handled(async (req, res) => {
+  const { displayName, avatar } = req.body;
+  if (typeof displayName !== "string" || !AVATARS.has(avatar)) {
+    return res.status(400).json({ ok: false, msg: "请输入有效的昵称并选择头像" });
+  }
+
+  const name = displayName.trim();
+  if (name.length > DISPLAY_NAME_MAX_LENGTH) {
+    return res.status(400).json({ ok: false, msg: "昵称最长 32 个字符" });
+  }
+  await pool.query(
+    `INSERT INTO user_profiles (user_id, display_name, avatar) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE display_name = ?, avatar = ?`,
+    [req.user.id, name, avatar, name, avatar]
+  );
+  res.json({ ok: true, profile: { displayName: name, avatar } });
+}));
+
+app.post("/api/auth/password", requireUser, handled(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (typeof currentPassword !== "string" || !currentPassword) {
+    return res.status(400).json({ ok: false, msg: "请输入当前密码" });
+  }
+  if (typeof newPassword !== "string" || newPassword.length < PASSWORD_MIN_LENGTH) {
+    return res.status(400).json({ ok: false, msg: "新密码至少 6 位" });
+  }
+  if (newPassword.length > PASSWORD_MAX_LENGTH) {
+    return res.status(400).json({ ok: false, msg: "新密码最长 30 位" });
+  }
+  if (currentPassword === newPassword) {
+    return res.status(400).json({ ok: false, msg: "新密码必须与当前密码不同" });
+  }
+
+  const [[account]] = await pool.query("SELECT password_hash FROM users WHERE id = ?", [req.user.id]);
+  if (!account) return res.status(401).json({ ok: false, msg: "登录已过期，请重新登录" });
+  if (!(await verifyPassword(currentPassword, account.password_hash))) {
+    return res.status(400).json({ ok: false, msg: "当前密码不正确" });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  const status = await inTransaction(async (connection) => {
+    const [[locked]] = await connection.query(
+      "SELECT password_hash FROM users WHERE id = ? FOR UPDATE", [req.user.id]
+    );
+    const [[session]] = await connection.query(
+      "SELECT token FROM sessions WHERE token = ? AND user_id = ? AND expires_at > NOW() FOR UPDATE",
+      [req.sessionToken, req.user.id]
+    );
+    if (!locked || !session) return 401;
+    if (locked.password_hash !== account.password_hash) return 409;
+
+    await connection.query("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, req.user.id]);
+    await connection.query("DELETE FROM sessions WHERE user_id = ? AND token <> ?", [req.user.id, req.sessionToken]);
+    return 200;
+  });
+
+  if (status === 401) return res.status(401).json({ ok: false, msg: "登录已过期，请重新登录" });
+  if (status === 409) return res.status(409).json({ ok: false, msg: "密码已更新，请确认当前密码后重试" });
+  return res.json({ ok: true });
+}));
 
 /* ---------- 每日热量目标 ---------- */
 app.put("/api/goal", requireUser, handled(async (req, res) => {
@@ -337,7 +431,7 @@ function normDate(v) {
 const ROOT = path.join(__dirname, "..");
 const pages = [
   "index.html", "register.html", "home.html", "nutrition.html",
-  "chat.html", "tracker.html", "exercise.html",
+  "chat.html", "tracker.html", "exercise.html", "faq.html",
 ];
 function sendPage(page) {
   return (req, res) => res.sendFile(page, { root: ROOT });

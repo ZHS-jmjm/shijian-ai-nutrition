@@ -46,7 +46,7 @@ async function apiFetch(url, options = {}) {
 
 const Auth = {
   KEY_TOKEN: "shijian_token",
-  user: null,            // 登录后缓存的当前用户 { username, goal }
+  user: null,            // 登录后缓存的当前用户
   _readyPromise: null,   // 只初始化一次
 
   /** 页面加载时调用一次：用 token 换取当前用户信息（GET /api/auth/me） */
@@ -72,6 +72,17 @@ const Auth = {
   /** 同步获取当前会话（须先 await Auth.ready()），形状与旧版一致：{name} 或 null */
   current() {
     return this.user ? { name: this.user.username } : null;
+  },
+
+  displayNameFor(user = this.user) {
+    return user?.displayName?.trim() || user?.username || "";
+  },
+
+  avatarFor(user = this.user) {
+    const glyphs = { leaf: "🌿", grain: "🌾", berry: "🫐" };
+    return user && Object.hasOwn(glyphs, user.avatar)
+      ? glyphs[user.avatar]
+      : Array.from(this.displayNameFor(user))[0] || "食";
   },
 
   async register(name, pw) {
@@ -123,17 +134,26 @@ const Auth = {
   /** 在导航栏渲染用户区（传入容器元素；内部会先等登录态就绪） */
   async mountNavUser(el) {
     await this.ready();
-    const session = this.current();
-    if (!el || !session) return;
-    el.innerHTML =
-      '<span class="nav-username">👋 ' + this.escapeHtml(session.name) + "</span>" +
-      '<button class="nav-logout" id="logout-btn">退出登录</button>';
-    document.getElementById("logout-btn").addEventListener("click", () => this.logout());
-  },
+    if (!el || !this.user) return;
 
-  escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
+    const displayName = this.displayNameFor();
+    const avatar = document.createElement("span");
+    avatar.className = "nav-avatar";
+    avatar.textContent = this.avatarFor();
+    avatar.title = displayName;
+    avatar.setAttribute("aria-hidden", "true");
+
+    const label = document.createElement("span");
+    label.className = "nav-username";
+    label.textContent = displayName;
+    label.title = displayName;
+
+    const logout = document.createElement("button");
+    logout.className = "nav-logout";
+    logout.id = "logout-btn";
+    logout.type = "button";
+    logout.textContent = "退出登录";
+    logout.addEventListener("click", () => this.logout());
+    el.replaceChildren(avatar, label, logout);
   },
 };

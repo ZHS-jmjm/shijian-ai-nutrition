@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人中心 · 食鉴 AI 营养分析师</title>
+  <meta name="description" content="查看今日饮食，管理食鉴资料、热量目标和密码。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scroll.css">
+  <style>
+    .profile-page { padding-bottom: 36px; }
+    .profile-section { padding-top: clamp(18px, 3vw, 32px); }
+    .profile-hero {
+      position: relative;
+      isolation: isolate;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+      gap: clamp(20px, 4vw, 44px);
+      align-items: center;
+      min-height: 200px;
+      padding: clamp(24px, 5vw, 56px);
+      overflow: hidden;
+      border-radius: 24px;
+      color: var(--card);
+      background: var(--green-700);
+    }
+    .profile-hero img {
+      position: absolute;
+      z-index: -2;
+      inset: 0 0 0 auto;
+      width: 70%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 58%;
+    }
+    .profile-hero::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      background: linear-gradient(90deg, var(--green-700) 30%, rgba(25, 61, 49, .92) 60%, rgba(25, 61, 49, .65));
+    }
+    .profile-hero h1 { font: 700 clamp(34px, 5vw, 54px)/1.15 var(--display-font); }
+    .profile-account {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding: 15px;
+      border: 1px solid rgba(255, 253, 248, .25);
+      border-radius: 16px;
+      background: rgba(25, 61, 49, .8);
+    }
+    .profile-avatar {
+      display: grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: var(--green-50);
+      color: var(--green-700);
+      font: 700 24px/1 var(--display-font);
+    }
+    .profile-account strong { display: block; font-size: 20px; overflow-wrap: anywhere; }
+    .profile-account p { color: #e0ebda; font-size: 13px; overflow-wrap: anywhere; }
+    .profile-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.14fr) minmax(0, .86fr);
+      gap: 18px;
+    }
+    .profile-card {
+      min-width: 0;
+      padding: clamp(20px, 3.6vw, 30px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+    .profile-card h2 { margin: 0 0 14px; color: var(--green-700); font: 700 24px/1.25 var(--display-font); }
+    .profile-form label { display: block; margin-bottom: 7px; font-size: 14px; font-weight: 600; }
+    .profile-fields { display: grid; gap: 14px; margin-bottom: 16px; }
+    .profile-fields :is(input, select) {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid #bac8b7;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 16px;
+    }
+    .profile-form-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .profile-goal-input {
+      display: flex;
+      align-items: center;
+      flex: 1 1 140px;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid #bac8b7;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink-2);
+      font-size: 14px;
+    }
+    .profile-goal-input:focus-within { box-shadow: 0 0 0 2px var(--green-700); }
+    .profile-goal-input input {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      background: transparent;
+      border: 0;
+      outline: none;
+      color: var(--ink);
+      font: inherit;
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+    }
+    .profile-hint { margin-top: 9px; color: var(--ink-2); font-size: 13px; }
+    .profile-status { min-height: 1.7em; margin-top: 6px; font-size: 13px; }
+    .profile-status[data-kind="success"] { color: var(--green-600); }
+    .profile-status[data-kind="error"] { color: var(--red); }
+    .profile-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .profile-stat {
+      min-width: 0;
+      padding: clamp(8px, 1.2vw, 14px);
+      border-radius: 12px;
+      background: var(--green-50);
+    }
+    .profile-stat dt { color: var(--ink-2); font-size: 13px; }
+    .profile-stat dd { margin-top: 3px; overflow-wrap: anywhere; }
+    .profile-stat strong {
+      color: var(--green-700);
+      font-size: clamp(17px, 3.2vw, 25px);
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+    .profile-stat small { display: block; color: var(--ink-2); font-size: 12px; }
+    .profile-links { display: grid; gap: 8px; list-style: none; }
+    .profile-links a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--green-50);
+      color: var(--green-700);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .profile-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    @media (max-width: 680px) {
+      .profile-hero, .profile-grid { grid-template-columns: minmax(0, 1fr); }
+      .profile-hero img { width: 100%; }
+      .profile-hero::before { background: rgba(25, 61, 49, .82); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============ 顶部导航（固定） ============ -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <a class="logo" href="home.html">
+        <span class="logo-icon">🥗</span>
+        <span class="logo-text">食鉴 <em>AI 营养分析师</em></span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="home.html">首页</a>
+        <a href="nutrition.html">AI 营养师</a>
+        <a href="chat.html">营养师对话</a>
+        <a href="tracker.html">今日摄入</a>
+        <a href="exercise.html">运动中心</a>
+        <a href="faq.html" aria-current="page">个人中心</a>
+      </nav>
+      <div class="nav-user" id="nav-user"></div>
+    </div>
+  </header>
+
+  <main class="page-scroll profile-page" id="pageScroll">
+    <section class="snap-block profile-section" data-block-name="账号信息" aria-labelledby="profile-heading">
+      <div class="container">
+        <div class="profile-hero">
+          <img src="image/veggies.jpg" alt="" decoding="async">
+          <h1 id="profile-heading">个人中心</h1>
+          <div class="profile-account">
+            <span class="profile-avatar" id="profile-avatar" aria-hidden="true">食</span>
+            <div>
+              <strong id="profile-username">加载中…</strong>
+              <p>用户名 <span id="profile-account-id">—</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="snap-block profile-section" data-block-name="今日概览" aria-label="今日概览与热量目标">
+      <div class="container">
+        <div class="profile-grid">
+          <section class="profile-card" aria-labelledby="profile-intake-heading">
+            <h2 id="profile-intake-heading">今日概览</h2>
+            <dl class="profile-stats">
+              <div class="profile-stat">
+                <dt>已摄入</dt>
+                <dd><strong id="profile-intake-kcal">—</strong><small>千卡</small></dd>
+              </div>
+              <div class="profile-stat">
+                <dt>剩余热量</dt>
+                <dd><strong id="profile-remaining-kcal">—</strong><small>千卡</small></dd>
+              </div>
+              <div class="profile-stat">
+                <dt>饮食记录</dt>
+                <dd><strong id="profile-meal-count">—</strong><small>条</small></dd>
+              </div>
+            </dl>
+            <p class="profile-status" id="profile-intake-status" role="status"></p>
+            <ul class="profile-links">
+              <li><a href="tracker.html">查看今日摄入 <span aria-hidden="true">→</span></a></li>
+              <li><a href="exercise.html">查看运动记录 <span aria-hidden="true">→</span></a></li>
+            </ul>
+          </section>
+
+          <section class="profile-card" aria-labelledby="profile-goal-heading">
+            <h2 id="profile-goal-heading">热量目标</h2>
+            <form class="profile-form" id="profile-goal-form">
+              <label for="profile-goal">每日目标（千卡）</label>
+              <div class="profile-form-row">
+                <div class="profile-goal-input">
+                  <input id="profile-goal" type="number" inputmode="numeric" min="800" max="6000" step="1"
+                    aria-describedby="profile-goal-hint" required disabled>
+                  <span aria-hidden="true">kcal</span>
+                </div>
+                <button class="btn btn-primary" type="submit" disabled>保存目标</button>
+              </div>
+              <p class="profile-hint" id="profile-goal-hint">可设为 800–6000 千卡，保存后同步到首页和今日摄入。</p>
+              <p class="profile-status" id="profile-status" role="status"></p>
+            </form>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="snap-block profile-section" data-block-name="资料与安全" aria-label="资料与安全">
+      <div class="container">
+        <div class="profile-grid">
+          <section class="profile-card" aria-labelledby="profile-edit-heading">
+            <h2 id="profile-edit-heading">个人资料</h2>
+            <form class="profile-form" id="profile-edit-form">
+              <div class="profile-fields">
+                <div>
+                  <label for="profile-display-name">昵称</label>
+                  <input id="profile-display-name" type="text" maxlength="32" autocomplete="nickname"
+                    placeholder="留空时显示用户名" disabled>
+                </div>
+                <div>
+                  <label for="profile-avatar-choice">头像</label>
+                  <select id="profile-avatar-choice" disabled>
+                    <option value="initial" selected>昵称首字</option>
+                    <option value="leaf">绿叶</option>
+                    <option value="grain">麦穗</option>
+                    <option value="berry">莓果</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" type="submit" disabled>保存资料</button>
+              <p class="profile-status" id="profile-edit-status" role="status"></p>
+            </form>
+          </section>
+
+          <section class="profile-card" aria-labelledby="profile-password-heading">
+            <h2 id="profile-password-heading">修改密码</h2>
+            <form class="profile-form" id="profile-password-form">
+              <div class="profile-fields">
+                <div>
+                  <label for="profile-current-password">当前密码</label>
+                  <input id="profile-current-password" type="password" autocomplete="current-password"
+                    required disabled>
+                </div>
+                <div>
+                  <label for="profile-new-password">新密码</label>
+                  <input id="profile-new-password" type="password" autocomplete="new-password" minlength="6"
+                    maxlength="30" aria-describedby="profile-password-hint" required disabled>
+                  <p class="profile-hint" id="profile-password-hint">密码长度为 6–30 个字符。</p>
+                </div>
+                <div>
+                  <label for="profile-confirm-password">确认新密码</label>
+                  <input id="profile-confirm-password" type="password" autocomplete="new-password"
+                    minlength="6" maxlength="30" required disabled>
+                </div>
+              </div>
+              <button class="btn btn-primary" type="submit" disabled>保存密码</button>
+              <p class="profile-status" id="profile-password-status" role="status"></p>
+            </form>
+          </section>
+        </div>
+
+        <footer class="footer">
+          <p><strong>🥗 食鉴 · AI 营养分析师</strong></p>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- 右侧圆点指示器 -->
+  <nav class="dots" id="dots" aria-label="页面区块导航"></nav>
+
+  <script src="js/auth.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/scroll-ui.js"></script>
+  <script src="js/global-ui.js"></script>
+</body>
+</html>

@@ -14,8 +14,9 @@
   const h = new Date().getHours();
   const period = h < 6 ? "夜深了" : h < 11 ? "早上好" : h < 14 ? "中午好"
                : h < 18 ? "下午好" : h < 22 ? "晚上好" : "夜深了";
+  const avatar = Auth.user.avatar;
   document.getElementById("welcome-title").textContent =
-    period + "，" + session.name + " 👋";
+    period + "，" + Auth.displayNameFor() + " " + (avatar && avatar !== "initial" ? Auth.avatarFor() : "👋");
 
   /* ---------- 今日概览（与追踪页共用 MySQL 里同一份数据） ---------- */
   function todayStr() {

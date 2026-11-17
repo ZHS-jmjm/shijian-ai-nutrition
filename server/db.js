@@ -72,6 +72,15 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表'
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id      INT UNSIGNED NOT NULL,
+      display_name VARCHAR(50)  NOT NULL DEFAULT '',
+      avatar       ENUM('initial','leaf','grain','berry') NOT NULL DEFAULT 'initial',
+      PRIMARY KEY (user_id),
+      CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户个人资料'
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       token      CHAR(64)     NOT NULL,
       user_id    INT UNSIGNED NOT NULL,

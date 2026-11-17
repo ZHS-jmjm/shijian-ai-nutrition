@@ -170,6 +170,36 @@ body {
   font-size: 15px; font-family: inherit; resize: vertical; outline: none; transition: border-color .2s;
 }
 #food-text:focus { border-color: var(--green-500); }
+
+/* 文字描述框 · 右下角语音录入按钮 */
+.text-input-wrap { position: relative; }
+.text-input-wrap #food-text { padding-right: 52px; }
+.voice-btn {
+  position: absolute; right: 10px; bottom: 10px;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--green-700);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 3px rgba(25, 61, 49, .10);
+  transition: background .2s, border-color .2s, color .2s, transform .2s;
+}
+.voice-btn:hover { border-color: var(--green-500); background: var(--green-50); transform: translateY(-1px); }
+.voice-btn:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
+.voice-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.voice-btn.recording {
+  background: var(--red); border-color: var(--red); color: #fff;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(173, 71, 62, .35); }
+  50% { box-shadow: 0 0 0 7px rgba(173, 71, 62, 0); }
+}
+.voice-tip {
+  position: absolute; right: 52px; bottom: 13px;
+  padding: 4px 10px; border-radius: 8px;
+  background: rgba(25, 61, 49, .88); color: #fff;
+  font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+
 .quick-chips { margin-top: 12px; font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .chip {
   padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line);
@@ -302,6 +332,18 @@ body {
 }
 .meal-del:hover { opacity: 1; }
 
+/* ---------- FAQ ---------- */
+.faq-list { max-width: 880px; margin: 0 auto; }
+.faq-list details {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 10px;
+}
+.faq-list summary { font-weight: 700; cursor: pointer; font-size: 15px; padding: 16px 20px; border-radius: 14px; }
+.faq-list summary::marker { color: var(--green-500); }
+.faq-list details[open] summary { color: var(--green-700); }
+.faq-list p { font-size: 14px; color: var(--ink-2); padding: 0 20px 17px; overflow-wrap: anywhere; }
+.faq-list code { background: var(--green-50); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+
 /* ---------- 页脚 ---------- */
 .footer { background: transparent; border-top: 1px solid var(--line); padding: 26px 0; margin-top: 30px; text-align: center; font-size: 13px; color: var(--ink-2); }
 .footer strong { color: var(--green-700); }
@@ -313,6 +355,11 @@ body {
 
 /* ---------- 导航栏用户区 ---------- */
 .nav-user { display: flex; align-items: center; gap: 10px; }
+.nav-avatar {
+  display: inline-grid; flex: none; place-items: center;
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--green-50); color: var(--green-700); font-size: 15px; font-weight: 700;
+}
 .nav-username {
   font-size: 14px; font-weight: 600; color: var(--green-700);
   max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
